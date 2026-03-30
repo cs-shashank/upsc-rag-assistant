@@ -13,7 +13,7 @@ CORS(app)  # allows React frontend to talk to this API
 
 # ── CONFIG ──────────────────────────────────────────────────────────────────
 DB_PATH        = "chroma_db"
-GOOGLE_API_KEY = "AIzaSyAJXA1aXdjHROzH4uhVy5-gzgiCIkpLAiM"   # same key as before
+GOOGLE_API_KEY = "your_api_key"   # same key as before
 # ────────────────────────────────────────────────────────────────────────────
 
 PROMPT_TEMPLATE = """
