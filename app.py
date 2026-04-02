@@ -1,137 +1,112 @@
-# app.py — Flask API for the RAG pipeline
-# Usage: python app.py
-# Then send POST requests to http://localhost:5000/ask
-
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_chroma import Chroma
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from langchain_core.prompts import PromptTemplate
+from dotenv import load_dotenv
+from rag_core import get_retriever, get_llm, PROMPT_TEMPLATE
 
-app = Flask(__name__)
-CORS(app)  # allows React frontend to talk to this API
+load_dotenv()
 
-# ── CONFIG ──────────────────────────────────────────────────────────────────
-DB_PATH        = "chroma_db"
-GOOGLE_API_KEY = "your_api_key"   # same key as before
-# ────────────────────────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
 
-PROMPT_TEMPLATE = """
-You are a helpful assistant answering questions from a UPSC study document.
-Use the context below to answer the question. The document contains MCQ questions
-with options (a), (b), (c), (d). Find the relevant question and identify the correct answer.
+retriever = None
+llm = None
 
-Context:
-{context}
 
-Question: {question}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load the RAG pipeline once when the server starts."""
+    global retriever, llm
+    print("Loading RAG pipeline …")
+    retriever = get_retriever(search_type="mmr")
+    llm = get_llm()
+    print("✅ RAG pipeline ready!")
+    yield
+    print("Shutting down …")
 
-Answer (mention the correct option and explain briefly, with page citation):
-"""
 
-# Load once when server starts — not on every request
-print("Loading RAG pipeline...")
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001",
-    google_api_key=GOOGLE_API_KEY
+app = FastAPI(title="UPSC RAG API", version="2.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-vectorstore = Chroma(
-    persist_directory=DB_PATH,
-    embedding_function=embeddings
-)
-retriever = vectorstore.as_retriever(
-    search_type="similarity",
-    search_kwargs={"k": 4}
-)
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    temperature=0,
-    google_api_key=GOOGLE_API_KEY
-)
-print("✅ RAG pipeline ready!")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal Server Error", "detail": str(exc)},
+    )
+
+class Message(BaseModel):
+    role: str   
+    content: str
+
+class QuestionRequest(BaseModel):
+    question: str
+    history: list[Message] = []
+@app.get("/")
+async def home():
+    return {
+        "status": "running",
+        "message": "UPSC RAG API v2 is live!",
+        "endpoints": {"POST /ask": "Ask a question about the document"},
+    }
 
 
-def ask_question(question):
-    """Core RAG logic — same as query.py but returns a dict"""
-    # Step 1: retrieve relevant chunks
-    docs = retriever.invoke(question)
+@app.post("/ask")
+@limiter.limit("10/minute")
+async def ask(request: Request, body: QuestionRequest):
+    """
+    Ask a question. Supports conversation history for follow-up questions.
 
-    # Step 2: build context
-    context = "\n\n".join([doc.page_content for doc in docs])
+    Request body:
+    {
+        "question": "Who founded the Self-Respect Movement?",
+        "history": [
+            {"role": "user",      "content": "..."},
+            {"role": "assistant", "content": "..."}
+        ]
+    }
+    """
+    question = body.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    # Step 3: build prompt and ask LLM
+    history_text = ""
+    for msg in body.history[-6:]:
+        label = "User" if msg.role == "user" else "Assistant"
+        history_text += f"{label}: {msg.content}\n"
+
+    docs = await retriever.ainvoke(question)
+    context = "\n\n".join(doc.page_content for doc in docs)
+
     prompt = PromptTemplate(
         template=PROMPT_TEMPLATE,
-        input_variables=["context", "question"]
+        input_variables=["context", "history", "question"],
     )
-    final_prompt = prompt.format(context=context, question=question)
-    response = llm.invoke(final_prompt)
+    final_prompt = prompt.format(
+        context=context,
+        history=history_text or "None",
+        question=question,
+    )
 
-    # Step 4: get source pages
-    pages = sorted(set(
-        doc.metadata.get("page", 0) + 1
-        for doc in docs
-    ))
+    response = await llm.ainvoke(final_prompt)
+    pages = sorted({doc.metadata.get("page", 0) + 1 for doc in docs})
 
     return {
+        "question": question,
         "answer": response.content,
         "source_pages": pages,
-        "question": question
     }
-
-
-# ── ROUTES ───────────────────────────────────────────────────────────────────
-
-@app.route("/")
-def home():
-    """Health check — visit http://localhost:5000 to confirm API is running"""
-    return jsonify({
-        "status": "running",
-        "message": "UPSC RAG API is live!",
-        "endpoints": {
-            "POST /ask": "Ask a question about the document"
-        }
-    })
-
-
-@app.route("/ask", methods=["POST"])
-def ask():
-    """
-    Main endpoint — accepts a question, returns an answer
-    
-    Request body (JSON):
-    {
-        "question": "Who founded the Self-Respect Movement?"
-    }
-    
-    Response (JSON):
-    {
-        "question": "...",
-        "answer": "...",
-        "source_pages": [12, 24]
-    }
-    """
-    # Get question from request
-    data = request.get_json()
-
-    # Validate input
-    if not data or "question" not in data:
-        return jsonify({
-            "error": "Please provide a question in the request body",
-            "example": {"question": "Who founded the Self-Respect Movement?"}
-        }), 400
-
-    question = data["question"].strip()
-
-    if not question:
-        return jsonify({"error": "Question cannot be empty"}), 400
-
-    # Get answer from RAG pipeline
-    result = ask_question(question)
-    return jsonify(result), 200
-
-
-# ── RUN ──────────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
