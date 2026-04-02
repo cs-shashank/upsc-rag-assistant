@@ -1,7 +1,61 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from 'react-markdown'
+
 const API_URL = "http://localhost:8000";
 
+// ── PDF Upload Component ──────────────────────────────────────────────────────
+function UploadPanel({ onUploadSuccess }) {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    setStatus("Uploading and processing... this may take 2-3 minutes.");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(`${API_URL}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Upload failed");
+      setStatus(`✅ Ingested "${data.filename}" — ${data.pages} pages, ${data.chunks} chunks`);
+      setFile(null);
+      onUploadSuccess();
+    } catch (e) {
+      setStatus(`❌ Error: ${e.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div style={styles.uploadPanel}>
+      <div style={styles.uploadTitle}>📄 Upload a PDF</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          type="file"
+          accept=".pdf"
+          onChange={e => setFile(e.target.files[0])}
+          style={styles.fileInput}
+        />
+        <button
+          onClick={handleUpload}
+          disabled={!file || uploading}
+          style={{ ...styles.sendBtn, padding: "8px 16px", height: 36, fontSize: 13 }}
+        >
+          {uploading ? "Processing..." : "Upload"}
+        </button>
+      </div>
+      {status && <div style={styles.uploadStatus}>{status}</div>}
+    </div>
+  );
+}
 
 // ── Skeleton loader ───────────────────────────────────────────────────────────
 function Skeleton() {
@@ -130,6 +184,9 @@ export default function App() {
         )}
       </div>
 
+      {/* Upload Panel */}
+      <UploadPanel onUploadSuccess={() => console.log("Upload done")} />
+
       {/* Messages */}
       <div style={styles.messages}>
         {messages.length === 0 && (
@@ -196,6 +253,28 @@ const styles = {
     cursor: "pointer",
     fontSize: 13,
   },
+  uploadPanel: {
+    background: "#fff",
+    borderBottom: "1px solid #e5e7eb",
+    padding: "12px 16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  uploadTitle: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+  },
+  fileInput: {
+    fontSize: 13,
+    color: "#374151",
+  },
+  uploadStatus: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 4,
+  },
   messages: {
     flex: 1,
     overflowY: "auto",
@@ -231,14 +310,6 @@ const styles = {
     color: "#888",
     borderTop: "1px solid #eee",
     paddingTop: 8,
-  },
-  skeletonLine: {
-    height: 12,
-    background: "linear-gradient(90deg, #eee 25%, #ddd 50%, #eee 75%)",
-    backgroundSize: "200% 100%",
-    borderRadius: 6,
-    marginBottom: 10,
-    animation: "shimmer 1.5s infinite",
   },
   skeletonDot: {
     width: 8,
