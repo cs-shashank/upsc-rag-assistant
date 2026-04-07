@@ -1,11 +1,10 @@
 import os
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_chroma import Chroma
+from langchain_pinecone import PineconeVectorStore
 from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_PATH = "chroma_db"
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 PROMPT_TEMPLATE = """
@@ -31,9 +30,10 @@ def get_embeddings():
     )
 
 def get_vectorstore():
-    return Chroma(
-        persist_directory=DB_PATH,
-        embedding_function=get_embeddings()
+    index_name = os.environ.get("PINECONE_INDEX_NAME", "upsc-rag")
+    return PineconeVectorStore(
+        index_name=index_name,
+        embedding=get_embeddings()
     )
 
 def get_retriever(search_type: str = "mmr"):

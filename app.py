@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from langchain_core.prompts import PromptTemplate
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
+from langchain_pinecone import PineconeVectorStore
 from dotenv import load_dotenv
 from rag_core import get_retriever, get_llm, get_embeddings, PROMPT_TEMPLATE
 
@@ -23,7 +23,6 @@ load_dotenv()
 # ── Config ────────────────────────────────────────────────────────────────────
 UPLOAD_DIR = Path("uploaded_docs")
 UPLOAD_DIR.mkdir(exist_ok=True)
-DB_PATH = "chroma_db"
 
 limiter = Limiter(key_func=get_remote_address)
 retriever = None
@@ -151,17 +150,15 @@ async def upload_pdf(file: UploadFile = File(...)):
         # Embed and store in batches (Gemini free tier rate limit)
         embeddings = get_embeddings()
         batch_size = 50
+        index_name = os.environ.get("PINECONE_INDEX_NAME", "upsc-rag")
 
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i + batch_size]
-            if i == 0:
-                vectorstore = Chroma.from_documents(
-                    documents=batch,
-                    embedding=embeddings,
-                    persist_directory=DB_PATH
-                )
-            else:
-                vectorstore.add_documents(batch)
+            PineconeVectorStore.from_documents(
+                documents=batch,
+                embedding=embeddings,
+                index_name=index_name
+            )
             print(f"   Processed {min(i + batch_size, len(chunks))}/{len(chunks)} chunks...")
             if i + batch_size < len(chunks):
                 time.sleep(60)  # avoid Gemini rate limit
