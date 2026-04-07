@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from 'react-markdown'
 
-const API_URL = "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 // ── PDF Upload Component ──────────────────────────────────────────────────────
 function UploadPanel({ onUploadSuccess }) {
@@ -97,6 +97,14 @@ function Bubble({ msg }) {
   );
 }
 
+// ── Suggested prompts ───────────────────────────────────────────────────────
+const SUGGESTED = [
+  "What topics does this document cover?",
+  "What type of questions are in this document?",
+  "Summarize the key concepts in this document.",
+  "Give me 3 important facts from this document.",
+];
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [messages, setMessages] = useState(() => {
@@ -124,8 +132,8 @@ export default function App() {
   // Auto-focus input on mount
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  const sendMessage = useCallback(async () => {
-    const question = input.trim();
+  const sendMessage = useCallback(async (questionOverride) => {
+    const question = (typeof questionOverride === "string" ? questionOverride : input).trim();
     if (!question || loading) return;
 
     const userMsg = { role: "user", content: question };
@@ -193,7 +201,19 @@ export default function App() {
           <div style={styles.empty}>
             <div style={{ fontSize: 48 }}>📖</div>
             <div style={styles.emptyTitle}>Ready to help you study!</div>
-            <div style={styles.emptyHint}>Try asking: <em>"Who founded the Self-Respect Movement?"</em></div>
+            <div style={styles.emptyHint}>Upload a PDF and click a suggestion, or type your own question.</div>
+            <div style={styles.suggestions}>
+              {SUGGESTED.map((s, i) => (
+                <button
+                  key={i}
+                  style={styles.chip}
+                  onClick={() => sendMessage(s)}
+                  disabled={loading}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((msg, i) => <Bubble key={i} msg={msg} />)}
@@ -331,6 +351,25 @@ const styles = {
   },
   emptyTitle: { fontSize: 20, fontWeight: 600, marginTop: 12, color: "#1a1a2e" },
   emptyHint: { fontSize: 14, color: "#555", marginTop: 8 },
+  suggestions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 20,
+    justifyContent: "center",
+  },
+  chip: {
+    padding: "9px 16px",
+    borderRadius: 20,
+    border: "1.5px solid #667eea",
+    background: "rgba(102,126,234,0.07)",
+    color: "#4f46e5",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "all 0.18s ease",
+    fontFamily: "inherit",
+  },
   inputRow: {
     display: "flex",
     gap: 10,
