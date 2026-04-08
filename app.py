@@ -109,9 +109,13 @@ async def ask(request: Request, body: QuestionRequest):
     response = await llm.ainvoke(final_prompt)
     pages = sorted({doc.metadata.get("page", 0) + 1 for doc in docs})
 
+    answer_text = response.content
+    if isinstance(answer_text, list):
+        answer_text = "".join(item.get("text", "") if isinstance(item, dict) else str(item) for item in answer_text)
+
     return {
         "question": question,
-        "answer": response.content,
+        "answer": answer_text,
         "source_pages": pages,
     }
 
