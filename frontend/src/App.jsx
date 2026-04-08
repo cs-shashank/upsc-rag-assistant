@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from 'react-markdown'
 
-const API_URL = import.meta.env.VITE_API_URL || "";
+const API_URL = import.meta.env.VITE_API_URL || "https://upsc-rag-assistant.onrender.com";
+
 
 // ── PDF Upload Component ──────────────────────────────────────────────────────
 function UploadPanel({ onUploadSuccess }) {
