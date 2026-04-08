@@ -55,6 +55,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"error": "Internal Server Error", "detail": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"}
     )
 
 # ── Models ────────────────────────────────────────────────────────────────────
