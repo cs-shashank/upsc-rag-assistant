@@ -2,6 +2,8 @@
 
 > An intelligent AI-powered study assistant for UPSC exam preparation — upload any PDF and ask questions, get precise answers with page citations.
 
+🚀 **[Live Demo](https://upsc-rag-assistant-1.onrender.com/)**
+
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.135-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react)](https://reactjs.org/)
 [![LangChain](https://img.shields.io/badge/LangChain-0.4-1C3C3C?style=flat)](https://langchain.com/)
@@ -43,6 +45,7 @@ Unlike a plain LLM chatbot, this assistant only answers from your uploaded docum
 | **RAG Framework** | LangChain, langchain-pinecone |
 | **PDF Parsing** | PyMuPDF (fitz) |
 | **Rate Limiting** | SlowAPI |
+| **Deployment** | Render (Web Services) |
 | **Config** | python-dotenv |
 
 ---
@@ -128,12 +131,16 @@ Frontend runs on: `http://localhost:5173`
 
 ## 🚀 Usage
 
-1. Open `http://localhost:5173` in your browser.
+### Live Demo
+1. Visit the **[Live App](https://upsc-rag-assistant-1.onrender.com/)**.
 2. Type a question related to your uploaded document in the chat box.
 3. The assistant retrieves relevant content, generates an answer, and cites the exact page numbers.
 4. You can ask follow-up questions — the assistant remembers your conversation context.
 
 You can also upload additional PDFs using the **Upload** button in the UI — they are embedded into Pinecone's cloud database automatically.
+
+### Local Development
+If you have set up the project locally, open `http://localhost:5173` in your browser to access the local frontend, and follow the same steps.
 
 ---
 
@@ -160,12 +167,12 @@ The RAG approach ensures the chatbot only answers from the provided study materi
 
 ## 🔮 Future Improvements
 
+- [x] Deploy full-stack application on Render
 - [ ] Multi-document support with namespace-based Pinecone separation
 - [ ] User authentication and personal document libraries
 - [ ] Subject-wise topic tagging and filtering
 - [ ] Exam-style quiz generation from uploaded content
 - [ ] Mobile-responsive PWA frontend
-- [ ] Deploy backend on Render, frontend on Vercel
 
 ---
 
